@@ -1,5 +1,9 @@
 # Video Dithering Tool
 
+
+![video1](https://i.ibb.co/zXphP2s/output-d68c7294dcf31a6c.gif)
+
+
 This helps create dithered videos that look epic! using Node.js and ffmpeg
 
 ## BUT WAIT
