@@ -146,20 +146,13 @@
 </head>
 <body>
     <div class="container">
-        <h1>Anime Dither</h1>
+        <h1>DitherVid 30fps</h1>
+        <h2>turn normal videos into dithered pieces</h2>
+
         <form id="uploadForm">
             <div>
                 <label for="videos">Upload Videos:</label>
                 <input type="file" id="videos" name="videos" multiple accept="video/mp4,video/quicktime" required>
-            </div>
-            
-            <div>
-                <label for="intervalOption">Interval Option:</label>
-                <select id="intervalOption" name="intervalOption">
-                    <option value="slow">Slow (Stop Motion Feel)</option>
-                    <option value="medium">Medium (Slightly Smoother)</option>
-                    <option value="fast">Fast (Smoothest)</option>
-                </select>
             </div>
             
             <div>
@@ -218,13 +211,6 @@
         </p>
     </div>
     
-    <style>
-        .footer {
-            text-align: center;
-        }
-    
-    </style>
-
     <script>
         const form = document.getElementById('uploadForm');
         const intensitySlider = document.getElementById('ditherIntensity');

@@ -1,7 +1,6 @@
 const express = require('express');
 const multer = require('multer');
 const ffmpeg = require('fluent-ffmpeg');
-const extractFrames = require('ffmpeg-extract-frames');
 const sharp = require('sharp');
 const fs = require('fs');
 const fsPromises = fs.promises;
@@ -34,6 +33,8 @@ const presetPalettes = {
   gameBoy: ['#0f380f', '#306230', '#8bac0f', '#9bbc0f'],
   blackWhiteRed: ['#FFFFFF', '#000000', '#FF0000']
 };
+
+// Check if FFmpeg is installed
 exec('ffmpeg -version', (error, stdout, stderr) => {
   if (error) {
     console.error('FFmpeg is not installed or not in PATH. Please install FFmpeg.');
@@ -61,7 +62,6 @@ app.post('/upload', upload.array('videos'), async (req, res) => {
 
     const videos = req.files;
     const ditherIntensity = parseFloat(req.body.ditherIntensity);
-    const intervalOption = req.body.intervalOption || 'slow';
     let palette;
     if (req.body.paletteType && presetPalettes[req.body.paletteType]) {
       palette = presetPalettes[req.body.paletteType];
@@ -73,12 +73,10 @@ app.post('/upload', upload.array('videos'), async (req, res) => {
     const uniqueId = crypto.randomBytes(8).toString('hex');
     const outputPath = path.join(outputDir, `output_${uniqueId}.mp4`);
 
-    console.log('Processing parameters:', { ditherIntensity, palette, intervalOption, outputPath });
+    console.log('Processing parameters:', { ditherIntensity, palette, outputPath });
 
     await ensureDirectoryExists(outputDir);
     await ensureDirectoryExists(framesDir);
-
-    const allFrames = [];
 
     for (let i = 0; i < videos.length; i++) {
       console.log(`Processing video ${i + 1} of ${videos.length}`);
@@ -87,11 +85,7 @@ app.post('/upload', upload.array('videos'), async (req, res) => {
       await ensureDirectoryExists(videoFramesDir);
 
       console.log('Extracting frames...');
-      await extractFrames({
-        input: video.path,
-        output: path.join(videoFramesDir, 'frame-%d.png'),
-        fps: 1
-      });
+      await extractFrames(video.path, videoFramesDir);
 
       console.log('Processing frames...');
       const frames = await fsPromises.readdir(videoFramesDir);
@@ -99,19 +93,14 @@ app.post('/upload', upload.array('videos'), async (req, res) => {
         const imagePath = path.join(videoFramesDir, frame);
         try {
           await applyDithering(imagePath, ditherIntensity, palette);
-          allFrames.push(imagePath);
         } catch (error) {
           console.error(`Error processing frame ${frame}:`, error);
         }
       }
-    }
 
-    if (allFrames.length === 0) {
-      throw new Error('No frames were successfully processed');
+      console.log('Reconstructing video...');
+      await reconstructVideo(videoFramesDir, outputPath);
     }
-
-    console.log('Reconstructing video with intervals...');
-    await reconstructVideoWithIntervals(allFrames, outputPath, intervalOption);
 
     console.log('Checking if output file exists...');
     try {
@@ -171,6 +160,17 @@ app.get('/download/:filename', (req, res) => {
       res.status(404).send('File not found');
     });
 });
+
+async function extractFrames(videoPath, outputDir) {
+  return new Promise((resolve, reject) => {
+    ffmpeg(videoPath)
+      .outputOptions('-vf fps=30')
+      .output(path.join(outputDir, 'frame-%d.png'))
+      .on('end', resolve)
+      .on('error', reject)
+      .run();
+  });
+}
 
 async function applyDithering(imagePath, intensity, palette) {
   console.log(`Applying dithering to ${imagePath}`);
@@ -258,86 +258,23 @@ function distributeError(data, width, height, x, y, errorR, errorG, errorB) {
   distribute(x, y + 1, 5 / 16);
   distribute(x + 1, y + 1, 1 / 16);
 }
-async function reconstructVideoWithIntervals(frames, outputPath, intervalOption) {
+
+async function reconstructVideo(framesDir, outputPath) {
   return new Promise((resolve, reject) => {
-    console.log('Starting video reconstruction with intervals...');
-    console.log(`Input frames: ${frames.length}`);
-    console.log(`Output path: ${outputPath}`);
-    console.log(`Interval option: ${intervalOption}`);
-
-    const fps = 5;
-    const frameDuration = 1 / fps;
-
-    const tempDir = path.join(path.dirname(outputPath), 'temp');
-    fsPromises.mkdir(tempDir, { recursive: true })
-      .then(() => {
-        let frameList = '';
-
-        switch (intervalOption) {
-          case 'slow':
-            for (let i = 0; i < frames.length; i += 2) {
-              const frame1 = frames[i];
-              const frame2 = frames[i + 1] || frame1;
-              for (let j = 0; j < 10; j++) {
-                frameList += `file '${frame1}'\nduration ${frameDuration}\n`;
-                frameList += `file '${frame2}'\nduration ${frameDuration}\n`;
-              }
-            }
-            break;
-          case 'medium':
-            for (let i = 0; i < frames.length; i += 2) {
-              const frame1 = frames[i];
-              const frame2 = frames[i + 1] || frame1;
-              frameList += `file '${frame1}'\nduration ${frameDuration}\n`;
-              frameList += `file '${frame2}'\nduration ${frameDuration}\n`;
-              frameList += `file '${frame2}'\nduration ${frameDuration}\n`;
-            }
-            break;
-          case 'fast':
-            for (const frame of frames) {
-              frameList += `file '${frame}'\nduration ${frameDuration}\n`;
-            }
-            break;
-          default:
-            reject(new Error('Invalid interval option'));
-            return;
-        }
-
-        const inputFile = path.join(tempDir, 'input.txt');
-        return fsPromises.writeFile(inputFile, frameList).then(() => inputFile);
-      })
-      .then((inputFile) => {
-        ffmpeg()
-          .input(inputFile)
-          .inputOptions(['-f concat', '-safe 0'])
-          .outputOptions([
-            `-r ${fps}`,
-            '-c:v libx264',
-            '-pix_fmt yuv420p',
-            '-preset medium',
-            '-crf 23',
-            '-movflags +faststart'
-          ])
-          .on('start', commandLine => {
-            console.log('FFmpeg process started:', commandLine);
-          })
-          .on('progress', progress => {
-            console.log('FFmpeg progress:', progress);
-          })
-          .on('error', (err, stdout, stderr) => {
-            console.error('FFmpeg error:', err.message);
-            console.error('FFmpeg stdout:', stdout);
-            console.error('FFmpeg stderr:', stderr);
-            reject(err);
-          })
-          .on('end', () => {
-            console.log('FFmpeg process completed');
-            fsPromises.rm(tempDir, { recursive: true }).catch(console.error);
-            resolve();
-          })
-          .save(outputPath);
-      })
-      .catch(reject);
+    ffmpeg()
+      .input(path.join(framesDir, 'frame-%d.png'))
+      .inputOptions('-framerate 30')
+      .outputOptions([
+        '-c:v libx264',
+        '-pix_fmt yuv420p',
+        '-preset medium',
+        '-crf 23',
+        '-movflags +faststart'
+      ])
+      .output(outputPath)
+      .on('end', resolve)
+      .on('error', reject)
+      .run();
   });
 }
 
