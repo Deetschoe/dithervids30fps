@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Dithering App</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 30px;
+        }
+        .container {
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="file"], select, input[type="range"] {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 20px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        input[type="range"] {
+            -webkit-appearance: none;
+            height: 10px;
+            background: #d3d3d3;
+            outline: none;
+            opacity: 0.7;
+            transition: opacity .2s;
+        }
+        input[type="range"]:hover {
+            opacity: 1;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: #4CAF50;
+            cursor: pointer;
+            border-radius: 50%;
+        }
+        input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            background: #4CAF50;
+            cursor: pointer;
+            border-radius: 50%;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #customPalette {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .color-input {
+            display: flex;
+            align-items: center;
+        }
+        .color-input input[type="color"] {
+            margin-right: 5px;
+        }
+        #loadingOverlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        #loadingGif {
+            width: 100px;
+            height: 100px;
+        }
+        #result {
+            margin-top: 20px;
+            text-align: center;
+        }
+        #videoContainer {
+            margin-top: 20px;
+            text-align: center;
+        }
+        #outputVideo {
+            max-width: 100%;
+            margin-bottom: 10px;
+        }
+        #downloadBtn {
+            background-color: #008CBA;
+        }
+        #downloadBtn:hover {
+            background-color: #007B9A;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 40px;
+            font-size: 14px;
+        }
+        .github-link {
+            color: #4CAF50;
+            text-decoration: none;
+        }
+        .github-link:hover {
+            text-decoration: underline;
+        }
+        .made-with-love {
+            color: #999;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Anime Dither</h1>
+        <form id="uploadForm">
+            <div>
+                <label for="videos">Upload Videos:</label>
+                <input type="file" id="videos" name="videos" multiple accept="video/mp4,video/quicktime" required>
+            </div>
+            
+            <div>
+                <label for="intervalOption">Interval Option:</label>
+                <select id="intervalOption" name="intervalOption">
+                    <option value="slow">Slow (Stop Motion Feel)</option>
+                    <option value="medium">Medium (Slightly Smoother)</option>
+                    <option value="fast">Fast (Smoothest)</option>
+                </select>
+            </div>
+            
+            <div>
+                <label for="ditherIntensity">Dither Intensity:</label>
+                <input type="range" id="ditherIntensity" name="ditherIntensity" min="0" max="1" step="0.1" value="0.8">
+                <span id="intensityValue">0.8</span>
+            </div>
+            
+            <div>
+                <label for="paletteSelect">Color Palette:</label>
+                <select id="paletteSelect" name="paletteSelect">
+                    <option value="custom">Custom</option>
+                    <option value="red">Red</option>
+                    <option value="redMonochrome">Red Monochrome</option>
+                    <option value="greenMonochrome">Green Monochrome</option>
+                    <option value="green">Green</option>
+                    <option value="blueMonochrome">Blue Monochrome</option>
+                    <option value="blue">Blue</option>
+                    <option value="yellowMonochrome">Yellow Monochrome</option>
+                    <option value="yellow">Yellow</option>
+                    <option value="purpleGreen">Purple & Green</option>
+                    <option value="yellowRed">Yellow & Red</option>
+                    <option value="blueYellow">Blue & Yellow</option>
+                    <option value="blackWhite">Black & White</option>
+                    <option value="rgby">RGBY</option>
+                    <option value="cmyk">CMYK</option>
+                    <option value="gameBoy">Game Boy DMG-01</option>
+                    <option value="blackWhiteRed">Black White Red</option>
+                </select>
+            </div>
+            
+            <div id="customPaletteContainer" style="display: none;">
+                <label>Custom Palette:</label>
+                <div id="customPalette"></div>
+                <button type="button" id="addColor">Add Color</button>
+            </div>
+            
+            <button type="submit">Process Video</button>
+        </form>
+        
+        <div id="videoContainer" style="display: none;">
+            <video id="outputVideo" controls></video>
+            <button id="downloadBtn">Download Processed Video</button>
+        </div>
+    </div>
+
+    <div id="loadingOverlay" style="text-align: center;">
+        <img id="loadingGif" src="https://i.ibb.co/ykwwKdV/output-onlinegiftools.gif" alt="Loading...">
+        <h1 style="color:#fff; font-size: 14px; font-weight: light; margin-top: 10px;">this may take a moment..</h1>
+    </div>
+
+    <div class="footer">
+        <a href="https://github.com/Deetschoe/dithervid" class="github-link" target="_blank">Star on GitHub if you like!</a>
+        <p class="made-with-love">
+            <a href="https://twitter.com/deetschoe" class="love-link" target="_blank">send me cool videos you make - Deet</a>
+        </p>
+    </div>
+    
+    <style>
+        .footer {
+            text-align: center;
+        }
+    
+    </style>
+
+    <script>
+        const form = document.getElementById('uploadForm');
+        const intensitySlider = document.getElementById('ditherIntensity');
+        const intensityValue = document.getElementById('intensityValue');
+        const addColorBtn = document.getElementById('addColor');
+        const customPalette = document.getElementById('customPalette');
+        const customPaletteContainer = document.getElementById('customPaletteContainer');
+        const paletteSelect = document.getElementById('paletteSelect');
+        const videoContainer = document.getElementById('videoContainer');
+        const outputVideo = document.getElementById('outputVideo');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+
+        intensitySlider.addEventListener('input', (e) => {
+            intensityValue.textContent = e.target.value;
+        });
+
+        paletteSelect.addEventListener('change', (e) => {
+            if (e.target.value === 'custom') {
+                customPaletteContainer.style.display = 'block';
+            } else {
+                customPaletteContainer.style.display = 'none';
+            }
+        });
+
+        addColorBtn.addEventListener('click', () => {
+            const colorInput = document.createElement('input');
+            colorInput.type = 'color';
+            const removeBtn = document.createElement('button');
+            removeBtn.textContent = 'Remove';
+            removeBtn.onclick = () => customPalette.removeChild(wrapper);
+            const wrapper = document.createElement('div');
+            wrapper.className = 'color-input';
+            wrapper.appendChild(colorInput);
+            wrapper.appendChild(removeBtn);
+            customPalette.appendChild(wrapper);
+        });
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(form);
+            
+            if (paletteSelect.value === 'custom') {
+                const palette = Array.from(customPalette.querySelectorAll('input[type="color"]')).map(input => input.value);
+                formData.append('palette', JSON.stringify(palette));
+            } else {
+                formData.append('paletteType', paletteSelect.value);
+            }
+
+            loadingOverlay.style.display = 'flex';
+            videoContainer.style.display = 'none';
+
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                
+                if (data.outputPath) {
+                    outputVideo.src = data.outputPath;
+                    downloadBtn.onclick = () => window.location.href = data.outputPath;
+                    videoContainer.style.display = 'block';
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('An error occurred. Please try again.');
+            } finally {
+                loadingOverlay.style.display = 'none';
+            }
+        });
+
+        // Add some default colors to the palette
+        ['#000000', '#FFFFFF', '#FF0000', '#00FF00', '#0000FF'].forEach(() => {
+            addColorBtn.click();
+        });
+        
+    </script>
+</body>
+</html>
